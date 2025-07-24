@@ -1,0 +1,162 @@
+-- // Configuração Kill Aura
+local ATTACK_INTERVAL = 0.1
+local MAX_DISTANCE = 130
+local WALK_SPEED = 30
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local EntityHit = ReplicatedStorage:WaitForChild("PlayerEvents"):WaitForChild("EntityHit")
+
+local HRP, Humanoid
+local killAuraEnabled = true
+
+local function updateCharacter()
+local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+HRP = char:WaitForChild("HumanoidRootPart")
+Humanoid = char:WaitForChild("Humanoid")
+end
+
+LocalPlayer.CharacterAdded:Connect(function()
+task.wait(0.5)
+updateCharacter()
+end)
+
+updateCharacter()
+
+-- // Loop de WalkSpeed
+task.spawn(function()
+while true do
+if Humanoid and Humanoid.Parent then
+if Humanoid.WalkSpeed ~= WALK_SPEED then
+Humanoid.WalkSpeed = WALK_SPEED
+end
+end
+task.wait(0.2)
+end
+end)
+
+-- // Função de alvo mais próximo
+local function getClosestMob()
+local closest, minDist = nil, MAX_DISTANCE
+for _, mob in ipairs(workspace:WaitForChild("SpawnedEntities"):GetChildren()) do
+local mobHRP = mob:FindFirstChild("HumanoidRootPart")
+local humanoid = mob:FindFirstChildWhichIsA("Humanoid")
+if mob:IsA("Model") and mobHRP and humanoid and humanoid.Health > 0 then
+local dist = (mobHRP.Position - HRP.Position).Magnitude
+if dist < minDist then
+closest = mob
+minDist = dist
+end
+end
+end
+return closest
+end
+
+-- // Loop do Kill Aura
+task.spawn(function()
+while true do
+if killAuraEnabled and HRP and HRP.Parent then
+local target = getClosestMob()
+if target and target:FindFirstChild("HumanoidRootPart") then
+local humanoid = target:FindFirstChildWhichIsA("Humanoid")
+local dist = (target.HumanoidRootPart.Position - HRP.Position).Magnitude
+if humanoid and humanoid.Health > 0 and dist <= MAX_DISTANCE then
+task.defer(function()
+pcall(function()
+EntityHit:FireServer(target)
+end)
+end)
+end
+end
+end
+task.wait(ATTACK_INTERVAL)
+end
+end)
+
+-- // UI do Kill Aura
+local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+ScreenGui.ResetOnSpawn = false
+
+local Button = Instance.new("ImageButton")
+Button.Size = UDim2.new(0, 48, 0, 48)
+Button.Position = UDim2.new(1, -60, 1, -60)
+Button.AnchorPoint = Vector2.new(0, 0)
+Button.BackgroundTransparency = 0
+Button.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Button.Image = "rbxassetid://8678122759"
+Button.ImageColor3 = Color3.fromRGB(255, 255, 255)
+Button.BorderSizePixel = 2
+Button.BorderColor3 = Color3.fromRGB(0, 255, 0)
+Button.ZIndex = 1000
+Button.Parent = ScreenGui
+
+Button.MouseButton1Click:Connect(function()
+killAuraEnabled = not killAuraEnabled
+Button.BorderColor3 = killAuraEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(0, 0, 0)
+end)
+
+-- // Drag do botão
+local dragging = false
+local dragInput, dragStart, startPos
+
+Button.InputBegan:Connect(function(input)
+if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+dragging = true
+dragStart = input.Position
+startPos = Button.Position
+input.Changed:Connect(function()
+if input.UserInputState == Enum.UserInputState.End then
+dragging = false
+end
+end)
+end
+end)
+
+Button.InputChanged:Connect(function(input)
+if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+dragInput = input
+end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+if input == dragInput and dragging then
+local delta = input.Position - dragStart
+Button.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X,
+startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+end)
+
+-- // 🛡️ Anti Fall Damage
+local remoteTarget = ReplicatedStorage:WaitForChild("PlayerEvents"):WaitForChild("Replicate")
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+local args = {...}
+local method = getnamecallmethod()
+
+if method == "FireServer" and self == remoteTarget then  
+    if args[1] == "Fall Damage" then  
+        print("[Bloqueado] Remote 'Fall Damage' detectado e cancelado.")  
+        return nil  
+    end  
+end  
+
+return oldNamecall(self, ...)
+
+end)
+
+setreadonly(getrawmetatable(game), false)
+
+-- // ♾️ Stamina Infinita
+local staminaValue = workspace:WaitForChild("jaesaltzs"):WaitForChild("Values"):WaitForChild("Stamina")
+local maxStamina = 100
+
+task.spawn(function()
+while true do
+if staminaValue and staminaValue.Value < maxStamina then
+staminaValue.Value = maxStamina
+end
+task.wait(0.2)
+end
+end)
