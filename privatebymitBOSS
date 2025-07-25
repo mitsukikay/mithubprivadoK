@@ -1,6 +1,8 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 
 -- Equipar arma automaticamente
@@ -158,5 +160,92 @@ task.spawn(function()
 			staminaValue.Value = maxStamina
 		end
 		task.wait(0.2)
+	end
+end)
+
+-- 🔁 Loop de Play Again com delay inicial de 40s e execução a cada 40s
+task.spawn(function()
+	task.wait(40)
+	while true do
+		pcall(function()
+			local args = {
+				[1] = 9,
+				[2] = "PlayAgain"
+			}
+			ReplicatedStorage:WaitForChild("ReplicaRemoteEvents"):WaitForChild("Replica_ReplicaSignal"):FireServer(unpack(args))
+		end)
+		task.wait(40)
+	end
+end)
+
+-- 🔔 Webhook de Skeleton King derrotado (via Delta)
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1392254886720311368/uaWqvkSHwnC7QDscOp1Lj7MHRaJDCG3GL8sCq52yhmeZO_yiacM7tbrS8wAmQW909LM-"
+local bossName = "Skeleton King"
+local SpawnedEntities = Workspace:WaitForChild("SpawnedEntities")
+local startTime = nil
+
+local function formatTime(seconds)
+	local minutes = math.floor(seconds / 60)
+	local secs = seconds % 60
+	if minutes > 0 then
+		return string.format("%dm %ds", minutes, secs)
+	else
+		return string.format("%ds", secs)
+	end
+end
+
+local function sendWebhook(elapsed)
+	local embed = {
+		title = "💀 Skeleton King derrotado!",
+		description = "made by gravesKKK",
+		color = 0xFF0000,
+		fields = {
+			{
+				name = "⏱️ Tempo total",
+				value = formatTime(elapsed),
+				inline = true
+			}
+		},
+		footer = {
+			text = "Sistema automático",
+			icon_url = "https://cdn-icons-png.flaticon.com/512/616/616408.png"
+		},
+		timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+	}
+
+	local payload = {
+		username = "chefe KKK",
+		embeds = { embed }
+	}
+
+	local requestFunc = syn and syn.request or request
+	local success, err = pcall(function()
+		requestFunc({
+			Url = WEBHOOK_URL,
+			Method = "POST",
+			Headers = {
+				["Content-Type"] = "application/json"
+			},
+			Body = HttpService:JSONEncode(payload)
+		})
+	end)
+
+	if not success then
+		warn("Erro ao enviar webhook:", err)
+	end
+end
+
+task.spawn(function()
+	while true do
+		local boss = SpawnedEntities:FindFirstChild(bossName)
+		if boss and not startTime then
+			startTime = os.time()
+		end
+		if not boss and startTime then
+			local elapsed = os.time() - startTime
+			sendWebhook(elapsed)
+			startTime = nil
+		end
+		task.wait(1)
 	end
 end)
