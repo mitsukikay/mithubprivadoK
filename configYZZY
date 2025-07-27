@@ -1,0 +1,159 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+local ATTACK_INTERVAL = 0.1
+local MAX_DISTANCE = 200
+local WALK_SPEED = 32
+local killAuraEnabled = true
+
+local EntityHit = ReplicatedStorage:WaitForChild("PlayerEvents"):WaitForChild("EntityHit")
+local remoteTarget = ReplicatedStorage:WaitForChild("PlayerEvents"):WaitForChild("Replicate")
+
+local HRP, Humanoid
+local function updateCharacter()
+	local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+	HRP = char:WaitForChild("HumanoidRootPart")
+	Humanoid = char:WaitForChild("Humanoid")
+end
+
+LocalPlayer.CharacterAdded:Connect(function()
+	task.wait(0.5)
+	updateCharacter()
+end)
+updateCharacter()
+
+task.spawn(function()
+	while true do
+		if Humanoid and Humanoid.Parent and Humanoid.WalkSpeed ~= WALK_SPEED then
+			Humanoid.WalkSpeed = WALK_SPEED
+		end
+		task.wait(0.2)
+	end
+end)
+
+local function getClosestMob()
+	local closest, minDist = nil, MAX_DISTANCE
+	for _, mob in ipairs(workspace:WaitForChild("SpawnedEntities"):GetChildren()) do
+		local hrp = mob:FindFirstChild("HumanoidRootPart")
+		local humanoid = mob:FindFirstChildWhichIsA("Humanoid")
+		if hrp and humanoid and humanoid.Health > 0 then
+			local dist = (hrp.Position - HRP.Position).Magnitude
+			if dist < minDist then
+				closest = mob
+				minDist = dist
+			end
+		end
+	end
+	return closest
+end
+
+task.spawn(function()
+	while true do
+		if killAuraEnabled and HRP and HRP.Parent then
+			local target = getClosestMob()
+			if target and target:FindFirstChild("HumanoidRootPart") then
+				local humanoid = target:FindFirstChildWhichIsA("Humanoid")
+				local dist = (target.HumanoidRootPart.Position - HRP.Position).Magnitude
+				if humanoid and humanoid.Health > 0 and dist <= MAX_DISTANCE then
+					task.defer(function()
+						pcall(function()
+							EntityHit:FireServer(target)
+						end)
+					end)
+				end
+			end
+		end
+		task.wait(ATTACK_INTERVAL)
+	end
+end)
+
+local gui = Instance.new("ScreenGui", game.CoreGui)
+gui.ResetOnSpawn = false
+
+local button = Instance.new("ImageButton")
+button.Size = UDim2.new(0, 48, 0, 48)
+button.Position = UDim2.new(1, -60, 1, -60)
+button.AnchorPoint = Vector2.new(0, 0)
+button.BackgroundTransparency = 0
+button.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+button.Image = "rbxassetid://8678122759"
+button.ImageColor3 = Color3.fromRGB(255, 255, 255)
+button.BorderSizePixel = 2
+button.BorderColor3 = Color3.fromRGB(0, 255, 0)
+button.ZIndex = 1000
+button.Parent = gui
+
+button.MouseButton1Click:Connect(function()
+	killAuraEnabled = not killAuraEnabled
+	button.BorderColor3 = killAuraEnabled and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(0, 0, 0)
+end)
+
+local dragging, dragInput, dragStart, startPos = false
+
+button.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = button.Position
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+button.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		dragInput = input
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		local delta = input.Position - dragStart
+		button.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+end)
+
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+	local args = {...}
+	local method = getnamecallmethod()
+	if method == "FireServer" and self == remoteTarget and args[1] == "Fall Damage" then
+		return nil
+	end
+	return oldNamecall(self, ...)
+end)
+
+setreadonly(getrawmetatable(game), false)
+
+local maxStamina = 100
+local staminaValue
+
+local function updateStamina()
+	local success, result = pcall(function()
+		return workspace:WaitForChild("Killua_aaaaaaaaaaaa"):WaitForChild("Values"):WaitForChild("Stamina")
+	end)
+	if success then
+		staminaValue = result
+	end
+end
+
+updateStamina()
+
+LocalPlayer.CharacterAdded:Connect(function()
+	task.wait(1)
+	updateStamina()
+end)
+
+task.spawn(function()
+	while true do
+		if staminaValue and staminaValue.Parent and staminaValue.Value < maxStamina then
+			staminaValue.Value = maxStamina
+		end
+		task.wait(0.2)
+	end
+end)
