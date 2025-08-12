@@ -1,0 +1,151 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Mouse = game.Players.LocalPlayer:GetMouse()
+
+local CamlockState = false
+local Prediction = 0.1398237
+local HorizontalPrediction = 0.1761055
+local VerticalPrediction = 0.160950
+local XPrediction = 0.1760955
+local YPrediction = 0.1671100
+
+local Locked = true
+getgenv().Key = "q"
+local FOV = 20 -- FOV em graus
+
+-- Função para calcular se alvo está dentro do FOV
+local function IsInFOV(targetPos)
+    local camera = workspace.CurrentCamera
+    local dirToTarget = (targetPos - camera.CFrame.Position).Unit
+    local dot = camera.CFrame.LookVector:Dot(dirToTarget)
+    local angle = math.deg(math.acos(dot))
+    return angle <= FOV
+end
+
+-- Raycast para encontrar alvo dentro do FOV
+local function RaycastTarget()
+    local camera = workspace.CurrentCamera
+    local origin = camera.CFrame.Position
+    local direction = camera.CFrame.LookVector * 1000 -- distância máxima
+
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character}
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+
+    local result = workspace:Raycast(origin, direction, raycastParams)
+    if result and result.Instance then
+        local char = result.Instance:FindFirstAncestorOfClass("Model")
+        if char and char:FindFirstChild("HumanoidRootPart")
+           and char:FindFirstChildOfClass("Humanoid")
+           and char:FindFirstChildOfClass("Humanoid").Health > 0
+           and IsInFOV(char.HumanoidRootPart.Position) then
+            local player = Players:GetPlayerFromCharacter(char)
+            if player and player ~= LocalPlayer then
+                return char.HumanoidRootPart
+            end
+        end
+    end
+    return nil
+end
+
+local enemy = nil
+
+RunService.Heartbeat:Connect(function()
+    if CamlockState and enemy then
+        local camera = workspace.CurrentCamera
+        camera.CFrame = CFrame.new(
+            camera.CFrame.Position,
+            Vector3.new(
+                enemy.Position.X + enemy.Velocity.X * XPrediction,
+                enemy.Position.Y + enemy.Velocity.Y * YPrediction,
+                enemy.Position.Z + enemy.Velocity.Z * Prediction
+            )
+        )
+    end
+end)
+
+-- Desenho do FOV com Drawing
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Visible = true
+FOVCircle.Color = Color3.new(1, 1, 1) -- branco
+FOVCircle.Thickness = 2
+FOVCircle.NumSides = 100
+FOVCircle.Transparency = 0.6
+FOVCircle.Filled = false
+
+RunService.RenderStepped:Connect(function()
+    local camera = workspace.CurrentCamera
+    local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+
+    -- Calcula o raio do círculo baseado no FOV e a largura da tela
+    local radius = math.tan(math.rad(FOV)) * (camera.ViewportSize.X / 2)  
+    FOVCircle.Position = screenCenter
+    FOVCircle.Radius = radius
+end)
+
+-- Toggle no teclado
+Mouse.KeyDown:Connect(function(k)
+    if k == getgenv().Key then
+        Locked = not Locked
+        if Locked then
+            enemy = RaycastTarget()
+            CamlockState = enemy ~= nil
+        else
+            enemy = nil
+            CamlockState = false
+        end
+    end
+end)
+
+-- GUI BeamerLock
+local BeamerLock = Instance.new("ScreenGui")
+local Frame = Instance.new("Frame")
+local UICorner = Instance.new("UICorner")
+local Logo = Instance.new("ImageLabel")
+local TextButton = Instance.new("TextButton")
+
+BeamerLock.Name = "Beamerlock"
+BeamerLock.Parent = game.CoreGui
+BeamerLock.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+Frame.Parent = BeamerLock
+Frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Frame.Size = UDim2.new(0, 202, 0, 70)
+Frame.Active = true
+Frame.Draggable = true
+
+UICorner.Parent = Frame
+
+Logo.Name = "Logo"
+Logo.Parent = Frame
+Logo.BackgroundTransparency = 5
+Logo.Position = UDim2.new(0.326, 0, 0, 0)
+Logo.Size = UDim2.new(0, 70, 0, 70)
+Logo.Image = "rbxassetid://17757503258"
+Logo.ImageTransparency = 0.2
+
+TextButton.Parent = Frame
+TextButton.BackgroundTransparency = 5
+TextButton.Position = UDim2.new(0.079, 0, 0.185, 0)
+TextButton.Size = UDim2.new(0, 170, 0, 44)
+TextButton.Font = Enum.Font.SourceSansSemibold
+TextButton.Text = "Toggle BeamerLock"
+TextButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+TextButton.TextScaled = true
+
+local state = true
+TextButton.MouseButton1Click:Connect(function()
+    state = not state
+    if not state then
+        TextButton.Text = "BeamerLock ON"
+        enemy = RaycastTarget()
+        CamlockState = enemy ~= nil
+        FOVCircle.Visible = true
+    else
+        TextButton.Text = "BeamerLock OFF"
+        enemy = nil
+        CamlockState = false
+        FOVCircle.Visible = false
+    end
+end)
