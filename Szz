@@ -1,0 +1,121 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local CamlockState = false
+local Prediction = 0.1398237
+local HorizontalPrediction = 0.1761055
+local VerticalPrediction = 0.160950
+local XPrediction = 0.1760955
+local YPrediction = 0.1671100
+
+local Locked = true
+getgenv().Key = "q"
+local FOV = 20 -- FOV desejado em graus
+local cosFOV = math.cos(math.rad(FOV))
+
+-- Função para verificar se está dentro do FOV
+local function IsInFOV(targetPos)
+    local camera = workspace.CurrentCamera
+    local dirToTarget = (targetPos - camera.CFrame.Position).Unit
+    local dot = camera.CFrame.LookVector:Dot(dirToTarget)
+    return dot >= cosFOV
+end
+
+-- Função para achar inimigo mais próximo do centro da tela dentro do FOV
+local function GetTargetInFOV()
+    local camera = workspace.CurrentCamera
+    local closestTarget
+    local closestDist = math.huge
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = player.Character.HumanoidRootPart
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health > 0 and IsInFOV(hrp.Position) then
+                local screenPos, onScreen = camera:WorldToViewportPoint(hrp.Position)
+                if onScreen then
+                    local distFromCenter = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)).Magnitude
+                    if distFromCenter < closestDist then
+                        closestDist = distFromCenter
+                        closestTarget = hrp
+                    end
+                end
+            end
+        end
+    end
+
+    return closestTarget
+end
+
+local enemy = nil
+
+RunService.Heartbeat:Connect(function()
+    if CamlockState and enemy then
+        local camera = workspace.CurrentCamera
+        camera.CFrame = CFrame.new(camera.CFrame.p, enemy.Position + enemy.Velocity * Prediction)
+    end
+end)
+
+Mouse.KeyDown:Connect(function(k)
+    if k == getgenv().Key then
+        Locked = not Locked
+        if Locked then
+            enemy = GetTargetInFOV()
+            CamlockState = enemy ~= nil
+        else
+            enemy = nil
+            CamlockState = false
+        end
+    end
+end)
+
+-- GUI BeamerLock
+local BeamerLock = Instance.new("ScreenGui")
+local Frame = Instance.new("Frame")
+local UICorner = Instance.new("UICorner")
+local Logo = Instance.new("ImageLabel")
+local TextButton = Instance.new("TextButton")
+
+BeamerLock.Name = "Beamerlock"
+BeamerLock.Parent = game.CoreGui
+BeamerLock.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+Frame.Parent = BeamerLock
+Frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Frame.Size = UDim2.new(0, 202, 0, 70)
+Frame.Active = true
+Frame.Draggable = true
+
+UICorner.Parent = Frame
+
+Logo.Name = "Logo"
+Logo.Parent = Frame
+Logo.BackgroundTransparency = 5
+Logo.Position = UDim2.new(0.326, 0, 0, 0)
+Logo.Size = UDim2.new(0, 70, 0, 70)
+Logo.Image = "rbxassetid://112823859876250"
+Logo.ImageTransparency = 0
+
+TextButton.Parent = Frame
+TextButton.BackgroundTransparency = 5
+TextButton.Position = UDim2.new(0.079, 0, 0.185, 0)
+TextButton.Size = UDim2.new(0, 170, 0, 44)
+TextButton.Font = Enum.Font.SourceSansSemibold
+TextButton.Text = "Toggle suki"
+TextButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+TextButton.TextScaled = true
+
+local state = true
+TextButton.MouseButton1Click:Connect(function()
+    state = not state
+    if not state then
+        TextButton.Text = "suki ON"
+        enemy = GetTargetInFOV()
+        CamlockState = enemy ~= nil
+    else
+        TextButton.Text = "suki OFF"
+        enemy = nil
+        CamlockState = false
+    end
+end)
